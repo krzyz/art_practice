@@ -69,8 +69,7 @@ impl AppDelegate<ProgramData> for Delegate {
                 .map(|r| r.unwrap().path())
                 .filter(|r| {
                     r.extension()
-                        .and_then(|ext| image_exts.contains(&ext.to_str().unwrap()).then_some(true))
-                        .is_some()
+                        .map_or(false, |ext| image_exts.contains(&ext.to_str().unwrap()))
                 })
                 .collect();
 
