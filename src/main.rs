@@ -29,11 +29,11 @@ impl Controller<WrappedImageOption, Image> for UpdateImage {
             (Some(_), None) => {
                 child.set_image_data(ImageBuf::empty());
                 ctx.request_paint();
-            },
+            }
             (_, Some(new_image)) => {
                 child.set_image_data(new_image.read().unwrap().clone());
                 ctx.request_paint();
-            },
+            }
             (None, None) => (),
         };
     }
@@ -52,17 +52,17 @@ struct ProgramData {
 impl ProgramData {
     fn set_image_from_path(&mut self, path: &PathBuf) {
         self.current_image = ImageBuf::from_file(path)
-                    .ok()
-                    .map(|img| Arc::new(RwLock::new(img)));
+            .ok()
+            .map(|img| Arc::new(RwLock::new(img)));
     }
-    
+
     fn set_image_id(&mut self, id: Option<usize>) {
         self.current_image_id = id;
         match id {
             Some(id) => {
                 let image_path = &self.images_paths[id].clone();
                 self.set_image_from_path(image_path);
-            },
+            }
             None => self.current_image = None,
         }
     }
@@ -99,7 +99,7 @@ fn ui_builder() -> impl Widget<ProgramData> {
             Target::Auto,
         ))
     });
-    
+
     let next = Button::new("Next").on_click(|_ctx, data: &mut ProgramData, _env| {
         if let Some(id) = data.current_image_id {
             if id < data.images_paths.len() - 1 {
@@ -133,7 +133,7 @@ impl AppDelegate<ProgramData> for Delegate {
         data: &mut ProgramData,
         _env: &Env,
     ) -> Handled {
-        let image_exts = ["jpg", "jpeg", "png", "bmp"];
+        let image_exts = ["gif", "jpg", "jpeg", "png", "bmp"];
 
         if let Some(file_info) = cmd.get(commands::OPEN_FILE) {
             let mut images_paths: Vec<_> = fs::read_dir(file_info.path())
