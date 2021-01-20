@@ -45,7 +45,27 @@ struct Delegate;
 /// The main model for a todo list application.
 struct ProgramData {
     images_paths: Arc<Vec<PathBuf>>,
+    current_image_id: Option<usize>,
     current_image: Option<Arc<RwLock<ImageBuf>>>,
+}
+
+impl ProgramData {
+    fn set_image_from_path(&mut self, path: &PathBuf) {
+        self.current_image = ImageBuf::from_file(path)
+                    .ok()
+                    .map(|img| Arc::new(RwLock::new(img)));
+    }
+    
+    fn set_image_id(&mut self, id: Option<usize>) {
+        self.current_image_id = id;
+        match id {
+            Some(id) => {
+                let image_path = &self.images_paths[id].clone();
+                self.set_image_from_path(image_path);
+            },
+            None => self.current_image = None,
+        }
+    }
 }
 
 fn main() -> Result<(), PlatformError> {
@@ -54,6 +74,7 @@ fn main() -> Result<(), PlatformError> {
         .with_min_size((1280., 720.));
     let data: ProgramData = ProgramData {
         images_paths: Arc::new(vec![]),
+        current_image_id: None,
         current_image: None,
     };
 
@@ -78,14 +99,27 @@ fn ui_builder() -> impl Widget<ProgramData> {
             Target::Auto,
         ))
     });
+    
+    let next = Button::new("Next").on_click(|_ctx, data: &mut ProgramData, _env| {
+        if let Some(id) = data.current_image_id {
+            if id < data.images_paths.len() - 1 {
+                data.set_image_id(Some(id + 1));
+            } else {
+                data.set_image_id(Some(0));
+            }
+        }
+    });
 
     let image = Image::new(ImageBuf::empty())
         .controller(UpdateImage)
         .lens(ProgramData::current_image)
         .fix_size(1024., 600.);
 
+    let mut row = Flex::row();
+    row.add_child(open);
+    row.add_child(next);
     let mut col = Flex::column();
-    col.add_child(open);
+    col.add_child(row);
     col.add_child(image);
     Align::centered(col)
 }
@@ -117,18 +151,10 @@ impl AppDelegate<ProgramData> for Delegate {
 
             data.images_paths = Arc::new(images_paths);
 
-            println!(
-                "{:?}",
-                data.current_image
-                    .as_ref()
-                    .map(|x| x.read().unwrap().raw_pixels()[0])
-            );
-
             if data.images_paths.len() > 0 {
-                let image_path = &data.images_paths[0];
-                data.current_image = ImageBuf::from_file(image_path)
-                    .ok()
-                    .map(|img| Arc::new(RwLock::new(img)));
+                data.set_image_id(Some(0));
+            } else {
+                data.set_image_id(None);
             }
 
             return Handled::Yes;
