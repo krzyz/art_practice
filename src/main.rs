@@ -11,12 +11,14 @@ use druid::{
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
+use std::{fs, time::Instant};
 
 const START_AUTO_STEP: Selector<()> = Selector::new("start_auto_step");
+const PAUSE_AUTO_STEP: Selector<()> = Selector::new("pause_auto_step");
+const STOP_AUTO_STEP: Selector<()> = Selector::new("stop_auto_step");
 
 struct UpdateImage;
 
@@ -46,6 +48,18 @@ impl Controller<WrappedImageOption, Image> for UpdateImage {
 }
 struct AutoStepControl {
     timer_id: TimerToken,
+    start_time: Option<Instant>,
+    this_duration: Duration,
+}
+
+impl AutoStepControl {
+    fn new() -> Self {
+        AutoStepControl {
+            timer_id: TimerToken::INVALID,
+            start_time: None,
+            this_duration: Duration::from_secs(5),
+        }
+    }
 }
 
 impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
@@ -61,9 +75,24 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
             Event::Timer(id) if id == &self.timer_id => {
                 data.set_next_image();
                 self.timer_id = ctx.request_timer(Duration::from_secs(5));
+                self.this_duration = Duration::from_secs(5);
+                self.start_time = Some(Instant::now());
             }
             Event::Command(cmd) if cmd.is(START_AUTO_STEP) => {
-                self.timer_id = ctx.request_timer(Duration::from_secs(5))
+                self.timer_id = ctx.request_timer(self.this_duration);
+                self.start_time = Some(Instant::now());
+            }
+            Event::Command(cmd) if cmd.is(PAUSE_AUTO_STEP) => {
+                if let Some(start_time) = self.start_time {
+                    self.this_duration = self.this_duration - (Instant::now() - start_time);
+                }
+                self.timer_id = TimerToken::INVALID;
+                self.start_time = None;
+            }
+            Event::Command(cmd) if cmd.is(STOP_AUTO_STEP) => {
+                self.this_duration = Duration::from_secs(5);
+                self.timer_id = TimerToken::INVALID;
+                self.start_time = None;
             }
             _ => (),
         }
@@ -80,6 +109,7 @@ struct ProgramData {
     images_paths: Arc<Vec<PathBuf>>,
     current_image_id: Option<usize>,
     current_image: WrappedImageOption,
+    playing: bool,
 }
 
 impl ProgramData {
@@ -119,6 +149,7 @@ fn main() -> Result<(), PlatformError> {
         images_paths: Arc::new(vec![]),
         current_image_id: None,
         current_image: None,
+        playing: false,
     };
 
     Ok(AppLauncher::with_window(main_window)
@@ -143,8 +174,20 @@ fn ui_builder() -> impl Widget<ProgramData> {
         ))
     });
 
-    let play = Button::new("Play").on_click(|ctx, _: &mut ProgramData, _| {
-        ctx.submit_command(START_AUTO_STEP);
+    let play = Button::new(|data: &ProgramData, _: &Env| {
+        if data.playing {
+            "Pause".to_owned()
+        } else {
+            "Play".to_owned()
+        }
+    })
+    .on_click(|ctx, data: &mut ProgramData, _| {
+        if data.playing {
+            ctx.submit_command(PAUSE_AUTO_STEP);
+        } else {
+            ctx.submit_command(START_AUTO_STEP);
+        }
+        data.playing = !data.playing;
     });
 
     let next = Button::new("Next").on_click(|_ctx, data: &mut ProgramData, _env| {
@@ -163,9 +206,7 @@ fn ui_builder() -> impl Widget<ProgramData> {
     let mut col = Flex::column();
     col.add_child(row);
     col.add_child(image);
-    Align::centered(col).controller(AutoStepControl {
-        timer_id: TimerToken::INVALID,
-    })
+    Align::centered(col).controller(AutoStepControl::new())
 }
 
 impl AppDelegate<ProgramData> for Delegate {
