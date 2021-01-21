@@ -1,9 +1,12 @@
 #![feature(bool_to_option)]
-use druid::widget::{Align, Button, Controller, Flex, Image};
 use druid::{
-    commands, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, FileDialogOptions,
-    Handled, ImageBuf, Lens, LocalizedString, PlatformError, Target, UpdateCtx, Widget, WidgetExt,
-    WindowDesc,
+    commands, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Event, FileDialogOptions,
+    Handled, ImageBuf, Lens, LocalizedString, PlatformError, Target, TimerToken, UpdateCtx, Widget,
+    WidgetExt, WindowDesc,
+};
+use druid::{
+    widget::{Align, Button, Controller, Flex, Image},
+    EventCtx, Selector,
 };
 
 use rand::seq::SliceRandom;
@@ -11,6 +14,9 @@ use rand::thread_rng;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
+
+const START_AUTO_STEP: Selector<()> = Selector::new("start_auto_step");
 
 struct UpdateImage;
 
@@ -38,6 +44,33 @@ impl Controller<WrappedImageOption, Image> for UpdateImage {
         };
     }
 }
+struct AutoStepControl {
+    timer_id: TimerToken,
+}
+
+impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
+    fn event(
+        &mut self,
+        child: &mut W,
+        ctx: &mut EventCtx,
+        event: &Event,
+        data: &mut ProgramData,
+        env: &Env,
+    ) {
+        match event {
+            Event::Timer(id) if id == &self.timer_id => {
+                data.set_next_image();
+                self.timer_id = ctx.request_timer(Duration::from_secs(5));
+            }
+            Event::Command(cmd) if cmd.is(START_AUTO_STEP) => {
+                self.timer_id = ctx.request_timer(Duration::from_secs(5))
+            }
+            _ => (),
+        }
+
+        child.event(ctx, event, data, env)
+    }
+}
 
 struct Delegate;
 
@@ -46,7 +79,7 @@ struct Delegate;
 struct ProgramData {
     images_paths: Arc<Vec<PathBuf>>,
     current_image_id: Option<usize>,
-    current_image: Option<Arc<RwLock<ImageBuf>>>,
+    current_image: WrappedImageOption,
 }
 
 impl ProgramData {
@@ -64,6 +97,16 @@ impl ProgramData {
                 self.set_image_from_path(image_path);
             }
             None => self.current_image = None,
+        }
+    }
+
+    fn set_next_image(&mut self) {
+        if let Some(id) = self.current_image_id {
+            if id < self.images_paths.len() - 1 {
+                self.set_image_id(Some(id + 1));
+            } else {
+                self.set_image_id(Some(0));
+            }
         }
     }
 }
@@ -92,7 +135,7 @@ fn ui_builder() -> impl Widget<ProgramData> {
         .title("Choose images")
         .button_text("Open");
 
-    let open = Button::new("Select directories").on_click(move |ctx, _, _| {
+    let open = Button::new("Select directory").on_click(move |ctx, _, _| {
         ctx.submit_command(Command::new(
             druid::commands::SHOW_OPEN_PANEL,
             open_dialog_options.clone(),
@@ -100,14 +143,12 @@ fn ui_builder() -> impl Widget<ProgramData> {
         ))
     });
 
+    let play = Button::new("Play").on_click(|ctx, _: &mut ProgramData, _| {
+        ctx.submit_command(START_AUTO_STEP);
+    });
+
     let next = Button::new("Next").on_click(|_ctx, data: &mut ProgramData, _env| {
-        if let Some(id) = data.current_image_id {
-            if id < data.images_paths.len() - 1 {
-                data.set_image_id(Some(id + 1));
-            } else {
-                data.set_image_id(Some(0));
-            }
-        }
+        data.set_next_image();
     });
 
     let image = Image::new(ImageBuf::empty())
@@ -117,11 +158,14 @@ fn ui_builder() -> impl Widget<ProgramData> {
 
     let mut row = Flex::row();
     row.add_child(open);
+    row.add_child(play);
     row.add_child(next);
     let mut col = Flex::column();
     col.add_child(row);
     col.add_child(image);
-    Align::centered(col)
+    Align::centered(col).controller(AutoStepControl {
+        timer_id: TimerToken::INVALID,
+    })
 }
 
 impl AppDelegate<ProgramData> for Delegate {
