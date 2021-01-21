@@ -5,7 +5,7 @@ use druid::{
     WidgetExt, WindowDesc,
 };
 use druid::{
-    widget::{Align, Button, Controller, Flex, Image},
+    widget::{Button, Controller, Flex, Image},
     EventCtx, Selector,
 };
 
@@ -199,14 +199,16 @@ fn ui_builder() -> impl Widget<ProgramData> {
         .lens(ProgramData::current_image)
         .fix_size(1024., 600.);
 
-    let mut row = Flex::row();
-    row.add_child(open);
-    row.add_child(play);
-    row.add_child(next);
-    let mut col = Flex::column();
-    col.add_child(row);
-    col.add_child(image);
-    Align::centered(col).controller(AutoStepControl::new())
+    Flex::column()
+        .with_child(
+            Flex::row()
+                .with_child(open)
+                .with_child(play)
+                .with_child(next),
+        )
+        .with_child(image)
+        .center()
+        .controller(AutoStepControl::new())
 }
 
 impl AppDelegate<ProgramData> for Delegate {
