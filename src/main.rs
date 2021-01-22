@@ -1,8 +1,10 @@
 #![feature(bool_to_option)]
+#![feature(try_blocks)]
+
 use druid::{
-    commands, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Event, FileDialogOptions,
-    Handled, ImageBuf, Lens, LocalizedString, PlatformError, Target, TimerToken, UpdateCtx, Widget,
-    WidgetExt, WindowDesc,
+    commands, widget::Label, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Event,
+    FileDialogOptions, Handled, ImageBuf, Lens, LocalizedString, PlatformError, Target, TimerToken,
+    UpdateCtx, Widget, WidgetExt, WindowDesc,
 };
 use druid::{
     widget::{Button, Controller, Flex, Image},
@@ -49,7 +51,7 @@ impl Controller<WrappedImageOption, Image> for UpdateImage {
 struct AutoStepControl {
     timer_id: TimerToken,
     start_time: Option<Instant>,
-    this_duration: Duration,
+    this_duration: Option<Duration>,
 }
 
 impl AutoStepControl {
@@ -57,7 +59,7 @@ impl AutoStepControl {
         AutoStepControl {
             timer_id: TimerToken::INVALID,
             start_time: None,
-            this_duration: Duration::from_secs(5),
+            this_duration: None,
         }
     }
 }
@@ -74,24 +76,35 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
         match event {
             Event::Timer(id) if id == &self.timer_id => {
                 data.set_next_image();
-                self.timer_id = ctx.request_timer(Duration::from_secs(5));
-                self.this_duration = Duration::from_secs(5);
+                data.step_forward();
+                let current_duration = data.get_current_duration();
+                if let Some(duration) = current_duration {
+                    self.timer_id = ctx.request_timer(duration);
+                }
+                self.this_duration = current_duration;
                 self.start_time = Some(Instant::now());
             }
             Event::Command(cmd) if cmd.is(START_AUTO_STEP) => {
-                self.timer_id = ctx.request_timer(self.this_duration);
+                let duration = if let Some(duration) = self.this_duration {
+                    duration
+                } else {
+                    data.get_current_duration().unwrap()
+                };
+                self.timer_id = ctx.request_timer(duration);
                 self.start_time = Some(Instant::now());
             }
             Event::Command(cmd) if cmd.is(PAUSE_AUTO_STEP) => {
-                if let Some(start_time) = self.start_time {
-                    self.this_duration = self.this_duration - (Instant::now() - start_time);
+                if let Some((start_time, duration)) =
+                    try { (self.start_time?, self.this_duration?) }
+                {
+                    self.this_duration = Some(duration - (Instant::now() - start_time));
                 }
                 self.timer_id = TimerToken::INVALID;
                 self.start_time = None;
             }
             Event::Command(cmd) if cmd.is(STOP_AUTO_STEP) => {
-                self.this_duration = Duration::from_secs(5);
                 self.timer_id = TimerToken::INVALID;
+                self.this_duration = None;
                 self.start_time = None;
             }
             _ => (),
@@ -110,6 +123,8 @@ struct ProgramData {
     current_image_id: Option<usize>,
     current_image: WrappedImageOption,
     playing: bool,
+    schedule: Arc<Vec<(usize, Duration)>>,
+    current: Option<(usize, usize)>,
 }
 
 impl ProgramData {
@@ -139,6 +154,29 @@ impl ProgramData {
             }
         }
     }
+
+    fn step_forward(&mut self) {
+        if let Some((big_step, small_step)) = self.current {
+            let current_big_step_length = self.schedule.get(big_step).unwrap().0;
+            self.current = if small_step >= current_big_step_length - 1 {
+                if big_step >= self.schedule.len() - 1 {
+                    Some((0, 0))
+                } else {
+                    Some((big_step + 1, 0))
+                }
+            } else {
+                Some((big_step, small_step + 1))
+            }
+        }
+    }
+
+    fn get_current_duration(&self) -> Option<Duration> {
+        if let Some((big_step, _)) = self.current {
+            Some(self.schedule[big_step].1)
+        } else {
+            None
+        }
+    }
 }
 
 fn main() -> Result<(), PlatformError> {
@@ -150,6 +188,11 @@ fn main() -> Result<(), PlatformError> {
         current_image_id: None,
         current_image: None,
         playing: false,
+        schedule: Arc::new(vec![
+            (5, Duration::from_secs(2)),
+            (5, Duration::from_secs(4)),
+        ]),
+        current: None,
     };
 
     Ok(AppLauncher::with_window(main_window)
@@ -182,17 +225,33 @@ fn ui_builder() -> impl Widget<ProgramData> {
         }
     })
     .on_click(|ctx, data: &mut ProgramData, _| {
-        if data.playing {
-            ctx.submit_command(PAUSE_AUTO_STEP);
-        } else {
-            ctx.submit_command(START_AUTO_STEP);
+        if data.images_paths.len() > 0 && data.schedule.len() > 0 {
+            if data.playing {
+                ctx.submit_command(PAUSE_AUTO_STEP);
+            } else {
+                if data.current_image_id == None {
+                    data.set_image_id(Some(0));
+                    data.current = Some((0, 0));
+                }
+                ctx.submit_command(START_AUTO_STEP);
+            }
+            data.playing = !data.playing;
         }
-        data.playing = !data.playing;
     });
 
     let next = Button::new("Next").on_click(|_ctx, data: &mut ProgramData, _env| {
         data.set_next_image();
     });
+
+    let stop = Button::new("Stop").on_click(|ctx, data: &mut ProgramData, _env| {
+        ctx.submit_command(STOP_AUTO_STEP);
+        data.set_image_id(None);
+        data.playing = false;
+        data.current = None;
+    });
+
+    let current =
+        Label::new(|data: &ProgramData, _env: &Env| format!("Current: {:?}", data.current));
 
     let image = Image::new(ImageBuf::empty())
         .controller(UpdateImage)
@@ -204,7 +263,9 @@ fn ui_builder() -> impl Widget<ProgramData> {
             Flex::row()
                 .with_child(open)
                 .with_child(play)
-                .with_child(next),
+                .with_child(next)
+                .with_child(stop)
+                .with_child(current),
         )
         .with_child(image)
         .center()
@@ -214,7 +275,7 @@ fn ui_builder() -> impl Widget<ProgramData> {
 impl AppDelegate<ProgramData> for Delegate {
     fn command(
         &mut self,
-        _ctx: &mut DelegateCtx,
+        ctx: &mut DelegateCtx,
         _target: Target,
         cmd: &Command,
         data: &mut ProgramData,
@@ -238,11 +299,9 @@ impl AppDelegate<ProgramData> for Delegate {
 
             data.images_paths = Arc::new(images_paths);
 
-            if data.images_paths.len() > 0 {
-                data.set_image_id(Some(0));
-            } else {
-                data.set_image_id(None);
-            }
+            data.set_image_id(None);
+            data.playing = false;
+            ctx.submit_command(STOP_AUTO_STEP);
 
             return Handled::Yes;
         }
