@@ -1,5 +1,6 @@
 #![feature(bool_to_option)]
 #![feature(try_blocks)]
+#![feature(duration_zero)]
 
 use druid::{
     commands, widget::Label, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Event,
@@ -48,10 +49,10 @@ impl Controller<WrappedImageOption, Image> for UpdateImage {
         };
     }
 }
+
 struct AutoStepControl {
     timer_id: TimerToken,
     start_time: Option<Instant>,
-    this_duration: Option<Duration>,
 }
 
 impl AutoStepControl {
@@ -59,7 +60,6 @@ impl AutoStepControl {
         AutoStepControl {
             timer_id: TimerToken::INVALID,
             start_time: None,
-            this_duration: None,
         }
     }
 }
@@ -75,37 +75,43 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
     ) {
         match event {
             Event::Timer(id) if id == &self.timer_id => {
-                data.set_next_image();
-                data.step_forward();
-                let current_duration = data.get_current_duration();
-                if let Some(duration) = current_duration {
-                    self.timer_id = ctx.request_timer(duration);
+                let now = Instant::now();
+
+                if let Some(start_time) = self.start_time {
+                    data.time_left =
+                        Arc::new(data.time_left.unwrap().checked_sub(now - start_time));
                 }
-                self.this_duration = current_duration;
-                self.start_time = Some(Instant::now());
+
+                if *data.time_left == None {
+                    data.set_next_image();
+                    data.step_forward();
+                    data.time_left = Arc::new(data.get_current_duration());
+                }
+
+                self.start_time = Some(now);
+                self.timer_id = ctx.request_timer(Duration::from_millis(20));
             }
             Event::Command(cmd) if cmd.is(START_AUTO_STEP) => {
-                let duration = if let Some(duration) = self.this_duration {
-                    duration
-                } else {
-                    data.get_current_duration().unwrap()
-                };
-                self.timer_id = ctx.request_timer(duration);
+                self.timer_id = ctx.request_timer(Duration::from_millis(20));
                 self.start_time = Some(Instant::now());
+                if *data.time_left == None {
+                    data.time_left = Arc::new(data.get_current_duration());
+                }
             }
             Event::Command(cmd) if cmd.is(PAUSE_AUTO_STEP) => {
-                if let Some((start_time, duration)) =
-                    try { (self.start_time?, self.this_duration?) }
-                {
-                    self.this_duration = Some(duration - (Instant::now() - start_time));
-                }
-                self.timer_id = TimerToken::INVALID;
+                let now = Instant::now();
                 self.start_time = None;
+                self.timer_id = TimerToken::INVALID;
+
+                if let Some(start_time) = self.start_time {
+                    data.time_left =
+                        Arc::new(data.time_left.unwrap().checked_sub(now - start_time));
+                }
             }
             Event::Command(cmd) if cmd.is(STOP_AUTO_STEP) => {
-                self.timer_id = TimerToken::INVALID;
-                self.this_duration = None;
                 self.start_time = None;
+                self.timer_id = TimerToken::INVALID;
+                data.time_left = Arc::new(None);
             }
             _ => (),
         }
@@ -125,6 +131,7 @@ struct ProgramData {
     playing: bool,
     schedule: Arc<Vec<(usize, Duration)>>,
     current: Option<(usize, usize)>,
+    time_left: Arc<Option<Duration>>,
 }
 
 impl ProgramData {
@@ -157,7 +164,7 @@ impl ProgramData {
 
     fn step_forward(&mut self) {
         if let Some((big_step, small_step)) = self.current {
-            let current_big_step_length = self.schedule.get(big_step).unwrap().0;
+            let current_big_step_length = self.schedule[big_step].0;
             self.current = if small_step >= current_big_step_length - 1 {
                 if big_step >= self.schedule.len() - 1 {
                     Some((0, 0))
@@ -193,6 +200,7 @@ fn main() -> Result<(), PlatformError> {
             (5, Duration::from_secs(4)),
         ]),
         current: None,
+        time_left: Arc::new(None),
     };
 
     Ok(AppLauncher::with_window(main_window)
@@ -253,6 +261,8 @@ fn ui_builder() -> impl Widget<ProgramData> {
     let current =
         Label::new(|data: &ProgramData, _env: &Env| format!("Current: {:?}", data.current));
 
+    let time = Label::new(|data: &ProgramData, _env: &Env| format!("Left: {:?}", data.time_left));
+
     let image = Image::new(ImageBuf::empty())
         .controller(UpdateImage)
         .lens(ProgramData::current_image)
@@ -265,7 +275,8 @@ fn ui_builder() -> impl Widget<ProgramData> {
                 .with_child(play)
                 .with_child(next)
                 .with_child(stop)
-                .with_child(current),
+                .with_child(current)
+                .with_child(time),
         )
         .with_child(image)
         .center()
