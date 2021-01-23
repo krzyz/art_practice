@@ -4,8 +4,8 @@
 
 use druid::{
     commands, widget::Label, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Event,
-    FileDialogOptions, Handled, ImageBuf, Lens, LensExt, LocalizedString, PlatformError, Target, TimerToken,
-    UpdateCtx, Widget, WidgetExt, WindowDesc,
+    FileDialogOptions, Handled, ImageBuf, Lens, LensExt, LocalizedString, PlatformError, Target,
+    TimerToken, UpdateCtx, Widget, WidgetExt, WindowDesc,
 };
 use druid::{
     widget::{Button, Controller, Flex, Image},
@@ -15,7 +15,7 @@ use druid::{
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, time::Instant};
 
@@ -24,7 +24,7 @@ const STOP_AUTO_STEP: Selector<()> = Selector::new("stop_auto_step");
 
 struct UpdateImage;
 
-type WrappedImage = Arc<RwLock<ImageBuf>>;
+type WrappedImage = Arc<ImageBuf>;
 
 impl Controller<Option<WrappedImage>, Image> for UpdateImage {
     fn update(
@@ -41,7 +41,7 @@ impl Controller<Option<WrappedImage>, Image> for UpdateImage {
                 ctx.request_paint();
             }
             (_, Some(new_image)) => {
-                child.set_image_data(new_image.read().unwrap().clone());
+                child.set_image_data((**new_image).clone());
                 ctx.request_paint();
             }
             (None, None) => (),
@@ -76,19 +76,26 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
             Event::Timer(id) if id == &self.timer_id => {
                 let now = Instant::now();
                 match data.state {
-                    AutoStepState::Paused(ref mut auto_step_data) | AutoStepState::Playing(ref mut auto_step_data) => {
+                    AutoStepState::Paused(ref mut auto_step_data)
+                    | AutoStepState::Playing(ref mut auto_step_data) => {
                         if let Some(time_left) = auto_step_data.time_left {
-                            auto_step_data.time_left = Duration::from_secs_f32(time_left).checked_sub(now - self.start_time.unwrap()).map(|d| d.as_secs_f32());
+                            auto_step_data.time_left = Duration::from_secs_f32(time_left)
+                                .checked_sub(now - self.start_time.unwrap())
+                                .map(|d| d.as_secs_f32());
                         } else {
                             auto_step_data.set_next_image(data.images_paths.as_slice());
                             auto_step_data.step_forward(data.schedule.as_slice());
-                            auto_step_data.time_left = Some(auto_step_data.get_current_duration(data.schedule.as_slice()).as_secs_f32());
+                            auto_step_data.time_left = Some(
+                                auto_step_data
+                                    .get_current_duration(data.schedule.as_slice())
+                                    .as_secs_f32(),
+                            );
                         }
 
                         self.start_time = Some(now);
                         self.timer_id = ctx.request_timer(Duration::from_millis(20));
-                    },
-                    AutoStepState::Stopped => ()
+                    }
+                    AutoStepState::Stopped => (),
                 }
             }
             Event::Command(cmd) if cmd.is(START_AUTO_STEP) => {
@@ -99,23 +106,24 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                         self.timer_id = ctx.request_timer(Duration::from_millis(20));
                         self.start_time = Some(now);
                         AutoStepState::Playing(auto_step_data)
-                    },
+                    }
                     AutoStepState::Stopped => {
                         self.timer_id = ctx.request_timer(Duration::from_millis(20));
                         self.start_time = Some(now);
                         AutoStepState::Playing(AutoStepData::new(data))
-                    },
+                    }
                     AutoStepState::Playing(ref mut auto_step_data) => {
                         if let Some(time_left) = auto_step_data.time_left {
-                            auto_step_data.time_left = Duration::from_secs_f32(time_left).checked_sub(now - self.start_time.unwrap()).map(|d| d.as_secs_f32());
+                            auto_step_data.time_left = Duration::from_secs_f32(time_left)
+                                .checked_sub(now - self.start_time.unwrap())
+                                .map(|d| d.as_secs_f32());
                         }
 
                         self.timer_id = TimerToken::INVALID;
                         self.start_time = None;
                         AutoStepState::Paused(auto_step_data.clone())
-                    },
+                    }
                 }
-
             }
             Event::Command(cmd) if cmd.is(STOP_AUTO_STEP) => {
                 data.state = AutoStepState::Stopped;
@@ -139,7 +147,6 @@ struct AutoStepData {
     time_left: Option<f32>,
 }
 
-
 #[derive(Clone, Data)]
 enum AutoStepState {
     Stopped,
@@ -153,7 +160,7 @@ impl AutoStepState {
 
         match self {
             Stopped => None,
-            Paused(data) | Playing(data) => Some(data)
+            Paused(data) | Playing(data) => Some(data),
         }
     }
 
@@ -162,7 +169,7 @@ impl AutoStepState {
 
         match self {
             Stopped => None,
-            Paused(data) | Playing(data) => Some(data)
+            Paused(data) | Playing(data) => Some(data),
         }
     }
 }
@@ -180,14 +187,14 @@ impl AutoStepData {
         let id = 0;
         AutoStepData {
             current_image_id: id,
-            current_image: Arc::new(RwLock::new(ImageBuf::from_file(&data.images_paths[id]).unwrap())),
+            current_image: Arc::new(ImageBuf::from_file(&data.images_paths[id]).unwrap()),
             current: (0, 0),
             time_left: Some(data.schedule[0].1.as_secs_f32()),
         }
     }
 
     fn set_image_from_path(&mut self, path: &PathBuf) {
-        self.current_image = Arc::new(RwLock::new(ImageBuf::from_file(path).unwrap()));
+        self.current_image = Arc::new(ImageBuf::from_file(path).unwrap());
     }
 
     fn set_image_id(&mut self, images_paths: &[PathBuf], id: usize) {
@@ -259,18 +266,15 @@ fn ui_builder() -> impl Widget<ProgramData> {
         ))
     });
 
-    let play = Button::new(|data: &ProgramData, _: &Env| {
-        match data.state {
-            AutoStepState::Playing(_) => "Pause".to_owned(),
-            _ => "Play".to_owned(),
-        }
+    let play = Button::new(|data: &ProgramData, _: &Env| match data.state {
+        AutoStepState::Playing(_) => "Pause".to_owned(),
+        _ => "Play".to_owned(),
     })
     .on_click(|ctx, data: &mut ProgramData, _| {
         if data.images_paths.len() > 0 && data.schedule.len() > 0 {
             ctx.submit_command(START_AUTO_STEP);
         }
     });
-
 
     let next = Button::new("Next").on_click(|_ctx, data: &mut ProgramData, _env| {
         if let Some(auto_step_data) = data.state.get_data_mut() {
@@ -282,25 +286,37 @@ fn ui_builder() -> impl Widget<ProgramData> {
         ctx.submit_command(STOP_AUTO_STEP);
     });
 
-    let current =
-        Label::new(|data: &ProgramData, _env: &Env| 
-            format!("Current: {}", data.state.get_data().map_or("None".to_owned(), |data| format!("{:?}", data.current)))
-        );
+    let current = Label::new(|data: &ProgramData, _env: &Env| {
+        format!(
+            "Current: {}",
+            data.state
+                .get_data()
+                .map_or("None".to_owned(), |data| format!("{:?}", data.current))
+        )
+    });
 
-    let time = Label::new(|data: &ProgramData, _env: &Env|
-            format!("Left: {:.2}", data.state.get_data().map_or(0., |data| data.time_left.unwrap_or(0.)))
-    );
-
+    let time = Label::new(|data: &ProgramData, _env: &Env| {
+        format!(
+            "Left: {:.2}",
+            data.state
+                .get_data()
+                .map_or(0., |data| data.time_left.unwrap_or(0.))
+        )
+    });
 
     let image = Image::new(ImageBuf::empty())
         .controller(UpdateImage)
         .lens(ProgramData::state.map(
-            |x| x.get_data().map_or(None, |data| Some(data.current_image.clone())),
+            |x| {
+                x.get_data()
+                    .map_or(None, |data| Some(data.current_image.clone()))
+            },
             |x, y| {
                 if let Some(auto_step_data) = x.get_data_mut() {
-                    auto_step_data.current_image = y.unwrap_or(Arc::new(RwLock::new(ImageBuf::empty())))
+                    auto_step_data.current_image = y.unwrap_or(Arc::new(ImageBuf::empty()))
                 }
-            }))
+            },
+        ))
         .fix_size(1024., 600.);
 
     Flex::column()
