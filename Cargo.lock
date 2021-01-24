@@ -37,6 +37,7 @@ dependencies = [
  "directories",
  "druid",
  "rand",
+ "ron",
  "serde",
 ]
 
@@ -1583,6 +1584,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ron"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "064ea8613fb712a19faf920022ec8ddf134984f100090764a4e1d768f3827f1f"
+dependencies = [
+ "base64",
+ "bitflags",
+ "serde",
+]
+
+[[package]]
 name = "roxmltree"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1666,6 +1678,9 @@ name = "serde"
 version = "1.0.120"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "166b2349061381baf54a58e4b13c89369feb0ef2eaa57198899e2312aac30aab"
+dependencies = [
+ "serde_derive",
+]
 
 [[package]]
 name = "serde_derive"

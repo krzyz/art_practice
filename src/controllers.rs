@@ -1,6 +1,6 @@
 use druid::{
     widget::{Controller, Image},
-    EventCtx,
+    Data, EventCtx,
 };
 use druid::{Env, Event, ImageBuf, TimerToken, UpdateCtx, Widget};
 
@@ -19,7 +19,7 @@ impl Controller<Option<Arc<ImageBuf>>, Image> for UpdateImage {
         ctx: &mut UpdateCtx<'_, '_>,
         old_data: &Option<Arc<ImageBuf>>,
         data: &Option<Arc<ImageBuf>>,
-        _env: &Env,
+        env: &Env,
     ) {
         match (old_data, data) {
             (Some(_), None) => {
@@ -32,6 +32,8 @@ impl Controller<Option<Arc<ImageBuf>>, Image> for UpdateImage {
             }
             (None, None) => (),
         };
+
+        child.update(ctx, old_data, data, env);
     }
 }
 
@@ -50,6 +52,20 @@ impl AutoStepControl {
 }
 
 impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
+    fn update(
+        &mut self,
+        child: &mut W,
+        ctx: &mut UpdateCtx<'_, '_>,
+        old_data: &ProgramData,
+        data: &ProgramData,
+        env: &Env,
+    ) {
+        if !old_data.config.same(&data.config) {
+            data.config.try_save();
+        }
+        child.update(ctx, old_data, data, env);
+    }
+
     fn event(
         &mut self,
         child: &mut W,
@@ -72,8 +88,7 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                             auto_step_data.set_next_image(data.images_paths.as_slice());
                             auto_step_data.step_forward(data.config.schedule.as_slice());
                             auto_step_data.time_left = Some(
-                                auto_step_data
-                                    .get_current_duration(data.config.schedule.as_slice())
+                                auto_step_data.get_current_duration(data.config.schedule.as_slice())
                                     as f64,
                             );
                         }
