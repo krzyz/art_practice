@@ -1,5 +1,6 @@
 use druid::{
-    widget::{Button, Flex, Image, Label, Tabs},
+    lens,
+    widget::{Button, Flex, Image, Label, List, Tabs, TextBox},
     Command, Env, FileDialogOptions, ImageBuf, LensExt, Target, Widget, WidgetExt,
 };
 
@@ -36,9 +37,57 @@ pub fn configuration_ui_builder() -> impl Widget<ProgramData> {
         ))
     });
 
-    Flex::column().with_child(Flex::row()
-        .with_child(current_dir_label)
-        .with_child(open))
+    let schedule_ui = schedule_ui_builder().lens(ProgramData::schedule);
+
+    Flex::column()
+        .with_child(Flex::row().with_child(current_dir_label).with_child(open))
+        .with_child(schedule_ui)
+}
+
+pub fn schedule_ui_builder() -> impl Widget<Arc<Vec<(usize, usize)>>> {
+    Flex::column()
+        .with_child(
+            Flex::row()
+                .with_child(Button::new("Add").on_click(
+                    |_, data: &mut Arc<Vec<(usize, usize)>>, _| {
+                        let mut new_schedule: Vec<_> = (**data).clone();
+                        new_schedule
+                            .push(new_schedule.as_slice().last().unwrap_or(&(5, 30)).clone());
+                        *data = Arc::new(new_schedule);
+                    },
+                ).padding(5.))
+                .with_child(Button::new("Remove").on_click(
+                    |_, data: &mut Arc<Vec<(usize, usize)>>, _| {
+                        let mut new_schedule: Vec<_> = (**data).clone();
+                        new_schedule.pop();
+                        *data = Arc::new(new_schedule);
+                    },
+                ).padding(5.))
+        )
+        .with_child(List::new(|| {
+            Flex::row()
+                .with_child(
+                    TextBox::new()
+                        .lens(lens::Identity.map(
+                            |(x, _): &(usize, usize)| x.to_string(),
+                            |(x, _): &mut (usize, usize), y: String| {
+                                *x = y.parse::<usize>().unwrap_or(*x)
+                            },
+                        )),
+                )
+                .with_child(
+                    TextBox::new()
+                        .lens(lens::Identity.map(
+                            |(_, x): &(usize, usize)| x.to_string(),
+                            |(_, x): &mut (usize, usize), y: String| {
+                                *x = y.parse::<usize>().unwrap_or(*x)
+                            },
+                        )),
+                )
+                .with_child(
+                    Label::new("s")
+                )
+        }))
 }
 
 pub fn presentation_ui_builder() -> impl Widget<ProgramData> {

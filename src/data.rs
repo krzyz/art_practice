@@ -4,7 +4,6 @@ use druid::Selector;
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 pub const START_AUTO_STEP: Selector<()> = Selector::new("start_auto_step");
 pub const STOP_AUTO_STEP: Selector<()> = Selector::new("stop_auto_step");
@@ -14,7 +13,7 @@ pub const STOP_AUTO_STEP: Selector<()> = Selector::new("stop_auto_step");
 pub struct ProgramData {
     pub images_paths: Arc<Vec<PathBuf>>,
     pub current_directory: Arc<Option<PathBuf>>,
-    pub schedule: Arc<Vec<(usize, Duration)>>,
+    pub schedule: Arc<Vec<(usize, usize)>>,
     pub state: AutoStepState,
 }
 
@@ -24,8 +23,8 @@ impl ProgramData {
             images_paths: Arc::new(vec![]),
             current_directory: Arc::new(None),
             schedule: Arc::new(vec![
-                (5, Duration::from_secs(2)),
-                (5, Duration::from_secs(4)),
+                (5, 2),
+                (5, 4),
             ]),
             state: AutoStepState::Stopped,
         }
@@ -64,7 +63,7 @@ pub struct AutoStepData {
     pub current_image_id: usize,
     pub current_image: Arc<ImageBuf>,
     pub current: (usize, usize),
-    pub time_left: Option<f32>,
+    pub time_left: Option<f64>,
 }
 
 impl AutoStepData {
@@ -74,7 +73,7 @@ impl AutoStepData {
             current_image_id: id,
             current_image: Arc::new(ImageBuf::from_file(&data.images_paths[id]).unwrap()),
             current: (0, 0),
-            time_left: Some(data.schedule[0].1.as_secs_f32()),
+            time_left: Some(data.schedule[0].1 as f64),
         }
     }
 
@@ -96,7 +95,7 @@ impl AutoStepData {
         }
     }
 
-    pub fn step_forward(&mut self, schedule: &[(usize, Duration)]) {
+    pub fn step_forward(&mut self, schedule: &[(usize, usize)]) {
         let (big_step, small_step) = self.current;
 
         let current_big_step_length = schedule[big_step].0;
@@ -111,7 +110,7 @@ impl AutoStepData {
         }
     }
 
-    pub fn get_current_duration(&self, schedule: &[(usize, Duration)]) -> Duration {
+    pub fn get_current_duration(&self, schedule: &[(usize, usize)]) -> usize {
         schedule[self.current.0].1
     }
 }

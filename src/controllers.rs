@@ -65,16 +65,16 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                     AutoStepState::Paused(ref mut auto_step_data)
                     | AutoStepState::Playing(ref mut auto_step_data) => {
                         if let Some(time_left) = auto_step_data.time_left {
-                            auto_step_data.time_left = Duration::from_secs_f32(time_left)
+                            auto_step_data.time_left = Duration::from_secs_f64(time_left)
                                 .checked_sub(now - self.start_time.unwrap())
-                                .map(|d| d.as_secs_f32());
+                                .map(|d| d.as_secs_f64());
                         } else {
                             auto_step_data.set_next_image(data.images_paths.as_slice());
                             auto_step_data.step_forward(data.schedule.as_slice());
                             auto_step_data.time_left = Some(
                                 auto_step_data
                                     .get_current_duration(data.schedule.as_slice())
-                                    .as_secs_f32(),
+                                    as f64,
                             );
                         }
 
@@ -100,9 +100,9 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                     }
                     AutoStepState::Playing(ref mut auto_step_data) => {
                         if let Some(time_left) = auto_step_data.time_left {
-                            auto_step_data.time_left = Duration::from_secs_f32(time_left)
+                            auto_step_data.time_left = Duration::from_secs_f64(time_left)
                                 .checked_sub(now - self.start_time.unwrap())
-                                .map(|d| d.as_secs_f32());
+                                .map(|d| d.as_secs_f64());
                         }
 
                         self.timer_id = TimerToken::INVALID;
