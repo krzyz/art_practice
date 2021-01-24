@@ -7,7 +7,7 @@ use druid::{
 use std::{path::PathBuf, sync::Arc};
 
 use crate::controllers::{AutoStepControl, UpdateImage};
-use crate::data::{AutoStepState, ProgramData, START_AUTO_STEP, STOP_AUTO_STEP};
+use crate::data::{AutoStepState, Config, ProgramData, START_AUTO_STEP, STOP_AUTO_STEP};
 
 pub fn ui_builder() -> impl Widget<ProgramData> {
     let presentation = presentation_ui_builder();
@@ -27,7 +27,7 @@ pub fn configuration_ui_builder() -> impl Widget<ProgramData> {
 
     let current_dir_label = Label::new(
         |data: &Arc<Option<PathBuf>>, _: &Env| format! {"Current directory: {}", Option::as_ref(&data).map(|x| x.to_str().unwrap()).unwrap_or("None")},
-    ).lens(ProgramData::current_directory);
+    ).lens(ProgramData::config.then(Config::current_directory));
 
     let open = Button::new("Change").on_click(move |ctx, _, _| {
         ctx.submit_command(Command::new(
@@ -37,7 +37,7 @@ pub fn configuration_ui_builder() -> impl Widget<ProgramData> {
         ))
     });
 
-    let schedule_ui = schedule_ui_builder().lens(ProgramData::schedule);
+    let schedule_ui = schedule_ui_builder().lens(ProgramData::config.then(Config::schedule));
 
     Flex::column()
         .with_child(Flex::row().with_child(current_dir_label).with_child(open))
@@ -96,7 +96,7 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
         _ => "Play".to_owned(),
     })
     .on_click(|ctx, data: &mut ProgramData, _| {
-        if data.images_paths.len() > 0 && data.schedule.len() > 0 {
+        if data.images_paths.len() > 0 && data.config.schedule.len() > 0 {
             ctx.submit_command(START_AUTO_STEP);
         }
     });

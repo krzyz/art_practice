@@ -9,11 +9,16 @@ pub const START_AUTO_STEP: Selector<()> = Selector::new("start_auto_step");
 pub const STOP_AUTO_STEP: Selector<()> = Selector::new("stop_auto_step");
 
 #[derive(Clone, Data, Lens)]
+pub struct Config {
+    pub current_directory: Arc<Option<PathBuf>>,
+    pub schedule: Arc<Vec<(usize, usize)>>,
+}
+
+#[derive(Clone, Data, Lens)]
 /// The main model for a todo list application.
 pub struct ProgramData {
     pub images_paths: Arc<Vec<PathBuf>>,
-    pub current_directory: Arc<Option<PathBuf>>,
-    pub schedule: Arc<Vec<(usize, usize)>>,
+    pub config: Config,
     pub state: AutoStepState,
 }
 
@@ -21,11 +26,13 @@ impl ProgramData {
     pub fn new() -> Self {
         ProgramData {
             images_paths: Arc::new(vec![]),
-            current_directory: Arc::new(None),
-            schedule: Arc::new(vec![
-                (5, 2),
-                (5, 4),
-            ]),
+            config: Config {
+                current_directory: Arc::new(None),
+                schedule: Arc::new(vec![
+                    (5, 2),
+                    (5, 4),
+                ]),
+            },
             state: AutoStepState::Stopped,
         }
     }
@@ -73,7 +80,7 @@ impl AutoStepData {
             current_image_id: id,
             current_image: Arc::new(ImageBuf::from_file(&data.images_paths[id]).unwrap()),
             current: (0, 0),
-            time_left: Some(data.schedule[0].1 as f64),
+            time_left: Some(data.config.schedule[0].1 as f64),
         }
     }
 

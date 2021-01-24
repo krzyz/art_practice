@@ -70,10 +70,10 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                                 .map(|d| d.as_secs_f64());
                         } else {
                             auto_step_data.set_next_image(data.images_paths.as_slice());
-                            auto_step_data.step_forward(data.schedule.as_slice());
+                            auto_step_data.step_forward(data.config.schedule.as_slice());
                             auto_step_data.time_left = Some(
                                 auto_step_data
-                                    .get_current_duration(data.schedule.as_slice())
+                                    .get_current_duration(data.config.schedule.as_slice())
                                     as f64,
                             );
                         }

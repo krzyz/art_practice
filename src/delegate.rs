@@ -21,7 +21,7 @@ impl AppDelegate<ProgramData> for Delegate {
         let image_exts = ["gif", "jpg", "jpeg", "png", "bmp"];
 
         if let Some(file_info) = cmd.get(commands::OPEN_FILE) {
-            data.current_directory = Arc::new(Some(file_info.path().to_path_buf()));
+            data.config.current_directory = Arc::new(Some(file_info.path().to_path_buf()));
             let mut images_paths: Vec<_> = fs::read_dir(file_info.path())
                 .expect("Unable to open chosen directory")
                 .into_iter()
