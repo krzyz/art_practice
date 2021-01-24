@@ -102,33 +102,35 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
     });
 
     let reload = Button::new("Reload").on_click(|_ctx, data: &mut ProgramData, _env| {
+        let mut end = false;
         if let Some(auto_step_data) = data.state.get_data_mut() {
-            auto_step_data.set_next_image(data.images_paths.as_slice());
+            end = auto_step_data.set_next_image(data.images_paths.as_slice());
             auto_step_data.time_left = Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
+        }
+
+        if end {
+            data.prepare_images(false);
         }
     });
 
     let skip = Button::new("Skip").on_click(|_ctx, data: &mut ProgramData, _env| {
         let mut end = false;
         if let Some(auto_step_data) = data.state.get_data_mut() {
-            auto_step_data.set_next_image(data.images_paths.as_slice());
-            end = auto_step_data.step_forward(&data.config.schedule);
+            end = auto_step_data.set_next_image(data.images_paths.as_slice());
+            auto_step_data.step_forward(&data.config.schedule);
             auto_step_data.time_left = Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
         }
+
         if end {
             data.prepare_images(false);
         }
     });
 
     let skip_block = Button::new("Skip block").on_click(|_ctx, data: &mut ProgramData, _env| {
-        let mut end = false;
         if let Some(auto_step_data) = data.state.get_data_mut() {
             auto_step_data.set_next_image(data.images_paths.as_slice());
-            end = auto_step_data.step_forward_block(&data.config.schedule);
+            auto_step_data.step_forward_block(&data.config.schedule);
             auto_step_data.time_left = Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
-        }
-        if end {
-            data.prepare_images(false);
         }
     });
 

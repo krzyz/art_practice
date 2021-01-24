@@ -10,10 +10,11 @@ use std::fs;
 use std::fs::{create_dir_all, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{RwLock, Arc};
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use rand::rngs::ThreadRng;
 
 pub fn get_cache_path() -> Option<PathBuf> {
     ProjectDirs::from("com", "Real Complexity", "Art Practice").map(|proj_dirs| {
@@ -75,6 +76,7 @@ pub struct ProgramData {
     pub images_paths: Arc<Vec<PathBuf>>,
     pub config: Config,
     pub state: AutoStepState,
+    pub rng: Arc<RwLock<ThreadRng>>,
 }
 
 impl ProgramData {
@@ -83,6 +85,7 @@ impl ProgramData {
             images_paths: Arc::new(vec![]),
             config: Config::new(),
             state: AutoStepState::Stopped,
+            rng: Arc::new(RwLock::new(thread_rng())),
         };
         data.prepare_images(true);
         data
@@ -109,7 +112,7 @@ impl ProgramData {
         }
 
         let mut images_paths = (*self.images_paths).clone();
-        images_paths.shuffle(&mut thread_rng());
+        images_paths.shuffle(&mut *self.rng.write().unwrap());
         self.images_paths = Arc::new(images_paths);
     }
 }
@@ -169,24 +172,25 @@ impl AutoStepData {
         self.set_image_from_path(&images_paths[id]);
     }
 
-    pub fn set_next_image(&mut self, images_paths: &[PathBuf]) {
+    pub fn set_next_image(&mut self, images_paths: &[PathBuf]) -> bool {
+        let mut end = false;
         let id = self.current_image_id;
         if id < images_paths.len() - 1 {
             self.set_image_id(images_paths, id + 1);
         } else {
             self.set_image_id(images_paths, 0);
+            end = true;
         }
+
+        end
     }
 
-    pub fn step_forward(&mut self, schedule: &[(usize, usize)]) -> bool {
+    pub fn step_forward(&mut self, schedule: &[(usize, usize)]) {
         let (big_step, small_step) = self.current;
-
-        let mut end = false;
 
         let current_big_step_length = schedule[big_step].0;
         self.current = if small_step >= current_big_step_length - 1 {
             if big_step >= schedule.len() - 1 {
-                end = true;
                 (0, 0)
             } else {
                 (big_step + 1, 0)
@@ -194,25 +198,17 @@ impl AutoStepData {
         } else {
             (big_step, small_step + 1)
         };
-
-        end
     }
 
-    pub fn step_forward_block(&mut self, schedule: &[(usize, usize)]) -> bool {
+    pub fn step_forward_block(&mut self, schedule: &[(usize, usize)]) {
         let (big_step, _) = self.current;
 
-        let mut end = false;
-
         self.current = if big_step >= schedule.len() - 1 {
-            end = true;
             (0, 0)
         } else {
             (big_step + 1, 0)
         };
-
-        end
     }
-
 
     pub fn get_current_duration(&self, schedule: &[(usize, usize)]) -> usize {
         schedule[self.current.0].1
