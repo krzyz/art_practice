@@ -178,29 +178,39 @@ impl AutoStepData {
         }
     }
 
-    pub fn step_forward(&mut self, schedule: &[(usize, usize)]) {
+    pub fn step_forward(&mut self, schedule: &[(usize, usize)]) -> bool {
         let (big_step, small_step) = self.current;
+
+        let mut end = false;
 
         let current_big_step_length = schedule[big_step].0;
         self.current = if small_step >= current_big_step_length - 1 {
             if big_step >= schedule.len() - 1 {
+                end = true;
                 (0, 0)
             } else {
                 (big_step + 1, 0)
             }
         } else {
             (big_step, small_step + 1)
-        }
+        };
+
+        end
     }
 
-    pub fn step_forward_block(&mut self, schedule: &[(usize, usize)]) {
+    pub fn step_forward_block(&mut self, schedule: &[(usize, usize)]) -> bool {
         let (big_step, _) = self.current;
 
+        let mut end = false;
+
         self.current = if big_step >= schedule.len() - 1 {
+            end = true;
             (0, 0)
         } else {
             (big_step + 1, 0)
-        }
+        };
+
+        end
     }
 
 

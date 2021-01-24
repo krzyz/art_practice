@@ -1,6 +1,5 @@
 use druid::{commands, AppDelegate, Command, DelegateCtx, Env, Handled, Target};
 
-use std::fs;
 use std::sync::Arc;
 
 use crate::data::*;

@@ -77,6 +77,7 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
         match event {
             Event::Timer(id) if id == &self.timer_id => {
                 let now = Instant::now();
+                let mut end = false;
                 match data.state {
                     AutoStepState::Paused(ref mut auto_step_data)
                     | AutoStepState::Playing(ref mut auto_step_data) => {
@@ -86,7 +87,7 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                                 .map(|d| d.as_secs_f64());
                         } else {
                             auto_step_data.set_next_image(data.images_paths.as_slice());
-                            auto_step_data.step_forward(data.config.schedule.as_slice());
+                            end = auto_step_data.step_forward(data.config.schedule.as_slice());
                             auto_step_data.time_left = Some(
                                 auto_step_data.get_current_duration(data.config.schedule.as_slice())
                                     as f64,
@@ -97,6 +98,9 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                         self.timer_id = ctx.request_timer(Duration::from_millis(20));
                     }
                     AutoStepState::Stopped => (),
+                }
+                if end {
+                    data.prepare_images(false);
                 }
             }
             Event::Command(cmd) if cmd.is(START_AUTO_STEP) => {
@@ -130,6 +134,7 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                 data.state = AutoStepState::Stopped;
                 self.start_time = None;
                 self.timer_id = TimerToken::INVALID;
+                data.prepare_images(false);
             }
             _ => (),
         }
