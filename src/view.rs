@@ -169,7 +169,7 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
                 }
             },
         ))
-        .fix_size(1024., 600.);
+        .expand();
 
     Flex::column()
         .with_child(
