@@ -1,21 +1,34 @@
 use druid::{
-    widget::{Button, Flex, Image, Label},
+    widget::{Button, Flex, Image, Label, Tabs},
     Command, Env, FileDialogOptions, ImageBuf, LensExt, Target, Widget, WidgetExt,
 };
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use crate::controllers::{AutoStepControl, UpdateImage};
 use crate::data::{AutoStepState, ProgramData, START_AUTO_STEP, STOP_AUTO_STEP};
 
 pub fn ui_builder() -> impl Widget<ProgramData> {
+    let presentation = presentation_ui_builder();
+    let configuration = configuration_ui_builder();
+
+    Tabs::new()
+        .with_tab("Player", presentation)
+        .with_tab("Config", configuration)
+}
+
+pub fn configuration_ui_builder() -> impl Widget<ProgramData> {
     let open_dialog_options = FileDialogOptions::new()
         .select_directories()
         .name_label("Target")
         .title("Choose images")
         .button_text("Open");
 
-    let open = Button::new("Select directory").on_click(move |ctx, _, _| {
+    let current_dir_label = Label::new(
+        |data: &Arc<Option<PathBuf>>, _: &Env| format! {"Current directory: {}", Option::as_ref(&data).map(|x| x.to_str().unwrap()).unwrap_or("None")},
+    ).lens(ProgramData::current_directory);
+
+    let open = Button::new("Change").on_click(move |ctx, _, _| {
         ctx.submit_command(Command::new(
             druid::commands::SHOW_OPEN_PANEL,
             open_dialog_options.clone(),
@@ -23,6 +36,12 @@ pub fn ui_builder() -> impl Widget<ProgramData> {
         ))
     });
 
+    Flex::column().with_child(Flex::row()
+        .with_child(current_dir_label)
+        .with_child(open))
+}
+
+pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
     let play = Button::new(|data: &ProgramData, _: &Env| match data.state {
         AutoStepState::Playing(_) => "Pause".to_owned(),
         _ => "Play".to_owned(),
@@ -79,7 +98,6 @@ pub fn ui_builder() -> impl Widget<ProgramData> {
     Flex::column()
         .with_child(
             Flex::row()
-                .with_child(open)
                 .with_child(play)
                 .with_child(next)
                 .with_child(stop)

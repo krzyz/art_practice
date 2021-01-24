@@ -13,6 +13,7 @@ pub const STOP_AUTO_STEP: Selector<()> = Selector::new("stop_auto_step");
 /// The main model for a todo list application.
 pub struct ProgramData {
     pub images_paths: Arc<Vec<PathBuf>>,
+    pub current_directory: Arc<Option<PathBuf>>,
     pub schedule: Arc<Vec<(usize, Duration)>>,
     pub state: AutoStepState,
 }
@@ -21,6 +22,7 @@ impl ProgramData {
     pub fn new() -> Self {
         ProgramData {
             images_paths: Arc::new(vec![]),
+            current_directory: Arc::new(None),
             schedule: Arc::new(vec![
                 (5, Duration::from_secs(2)),
                 (5, Duration::from_secs(4)),
