@@ -101,9 +101,26 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
         }
     });
 
-    let next = Button::new("Next").on_click(|_ctx, data: &mut ProgramData, _env| {
+    let reload = Button::new("Reload").on_click(|_ctx, data: &mut ProgramData, _env| {
         if let Some(auto_step_data) = data.state.get_data_mut() {
             auto_step_data.set_next_image(data.images_paths.as_slice());
+            auto_step_data.time_left = Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
+        }
+    });
+
+    let skip = Button::new("Skip").on_click(|_ctx, data: &mut ProgramData, _env| {
+        if let Some(auto_step_data) = data.state.get_data_mut() {
+            auto_step_data.set_next_image(data.images_paths.as_slice());
+            auto_step_data.step_forward(&data.config.schedule);
+            auto_step_data.time_left = Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
+        }
+    });
+
+    let skip_block = Button::new("Skip block").on_click(|_ctx, data: &mut ProgramData, _env| {
+        if let Some(auto_step_data) = data.state.get_data_mut() {
+            auto_step_data.set_next_image(data.images_paths.as_slice());
+            auto_step_data.step_forward_block(&data.config.schedule);
+            auto_step_data.time_left = Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
         }
     });
 
@@ -148,7 +165,9 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
         .with_child(
             Flex::row()
                 .with_child(play)
-                .with_child(next)
+                .with_child(reload)
+                .with_child(skip)
+                .with_child(skip_block)
                 .with_child(stop)
                 .with_child(current)
                 .with_child(time),

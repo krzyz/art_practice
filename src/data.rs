@@ -6,10 +6,14 @@ use directories::ProjectDirs;
 use ron::de::from_reader;
 use ron::ser::{to_writer_pretty, PrettyConfig};
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::fs::{create_dir_all, File};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 pub fn get_cache_path() -> Option<PathBuf> {
     ProjectDirs::from("com", "Real Complexity", "Art Practice").map(|proj_dirs| {
@@ -75,11 +79,38 @@ pub struct ProgramData {
 
 impl ProgramData {
     pub fn new() -> Self {
-        ProgramData {
+        let mut data = ProgramData {
             images_paths: Arc::new(vec![]),
             config: Config::new(),
             state: AutoStepState::Stopped,
+        };
+        data.prepare_images(true);
+        data
+    }
+
+    pub fn prepare_images(&mut self, reload: bool) {
+        let image_exts = ["gif", "jpg", "jpeg", "png", "bmp"];
+
+        if reload {
+            if let Some(dir_path) = (*self.config.current_directory).clone() {
+                let images_paths: Vec<_> = fs::read_dir(dir_path.as_path())
+                    .expect("Unable to open chosen directory")
+                    .into_iter()
+                    .filter(|r| r.is_ok())
+                    .map(|r| r.unwrap().path())
+                    .filter(|r| {
+                        r.extension()
+                            .map_or(false, |ext| image_exts.contains(&ext.to_str().unwrap()))
+                    })
+                    .collect();
+
+                self.images_paths = Arc::new(images_paths);
+            }
         }
+
+        let mut images_paths = (*self.images_paths).clone();
+        images_paths.shuffle(&mut thread_rng());
+        self.images_paths = Arc::new(images_paths);
     }
 }
 
@@ -161,6 +192,17 @@ impl AutoStepData {
             (big_step, small_step + 1)
         }
     }
+
+    pub fn step_forward_block(&mut self, schedule: &[(usize, usize)]) {
+        let (big_step, _) = self.current;
+
+        self.current = if big_step >= schedule.len() - 1 {
+            (0, 0)
+        } else {
+            (big_step + 1, 0)
+        }
+    }
+
 
     pub fn get_current_duration(&self, schedule: &[(usize, usize)]) -> usize {
         schedule[self.current.0].1
