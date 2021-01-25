@@ -1,6 +1,6 @@
 use druid::{
     lens,
-    widget::{Button, Flex, Image, Label, List, Tabs, TextBox},
+    widget::{Button, FillStrat, Flex, Image, Label, List, Tabs, TextBox},
     Command, Env, FileDialogOptions, ImageBuf, LensExt, Target, Widget, WidgetExt,
 };
 
@@ -48,45 +48,37 @@ pub fn schedule_ui_builder() -> impl Widget<Arc<Vec<(usize, usize)>>> {
     Flex::column()
         .with_child(
             Flex::row()
-                .with_child(Button::new("Add").on_click(
-                    |_, data: &mut Arc<Vec<(usize, usize)>>, _| {
-                        let mut new_schedule: Vec<_> = (**data).clone();
-                        new_schedule
-                            .push(new_schedule.as_slice().last().unwrap_or(&(5, 30)).clone());
-                        *data = Arc::new(new_schedule);
-                    },
-                ).padding(5.))
-                .with_child(Button::new("Remove").on_click(
-                    |_, data: &mut Arc<Vec<(usize, usize)>>, _| {
-                        let mut new_schedule: Vec<_> = (**data).clone();
-                        new_schedule.pop();
-                        *data = Arc::new(new_schedule);
-                    },
-                ).padding(5.))
+                .with_child(
+                    Button::new("Add")
+                        .on_click(|_, data: &mut Arc<Vec<(usize, usize)>>, _| {
+                            let mut new_schedule: Vec<_> = (**data).clone();
+                            new_schedule
+                                .push(new_schedule.as_slice().last().unwrap_or(&(5, 30)).clone());
+                            *data = Arc::new(new_schedule);
+                        })
+                        .padding(5.),
+                )
+                .with_child(
+                    Button::new("Remove")
+                        .on_click(|_, data: &mut Arc<Vec<(usize, usize)>>, _| {
+                            let mut new_schedule: Vec<_> = (**data).clone();
+                            new_schedule.pop();
+                            *data = Arc::new(new_schedule);
+                        })
+                        .padding(5.),
+                ),
         )
         .with_child(List::new(|| {
             Flex::row()
-                .with_child(
-                    TextBox::new()
-                        .lens(lens::Identity.map(
-                            |(x, _): &(usize, usize)| x.to_string(),
-                            |(x, _): &mut (usize, usize), y: String| {
-                                *x = y.parse::<usize>().unwrap_or(*x)
-                            },
-                        )),
-                )
-                .with_child(
-                    TextBox::new()
-                        .lens(lens::Identity.map(
-                            |(_, x): &(usize, usize)| x.to_string(),
-                            |(_, x): &mut (usize, usize), y: String| {
-                                *x = y.parse::<usize>().unwrap_or(*x)
-                            },
-                        )),
-                )
-                .with_child(
-                    Label::new("s")
-                )
+                .with_child(TextBox::new().lens(lens::Identity.map(
+                    |(x, _): &(usize, usize)| x.to_string(),
+                    |(x, _): &mut (usize, usize), y: String| *x = y.parse::<usize>().unwrap_or(*x),
+                )))
+                .with_child(TextBox::new().lens(lens::Identity.map(
+                    |(_, x): &(usize, usize)| x.to_string(),
+                    |(_, x): &mut (usize, usize), y: String| *x = y.parse::<usize>().unwrap_or(*x),
+                )))
+                .with_child(Label::new("s"))
         }))
 }
 
@@ -105,7 +97,8 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
         let mut end = false;
         if let Some(auto_step_data) = data.state.get_data_mut() {
             end = auto_step_data.set_next_image(data.images_paths.as_slice());
-            auto_step_data.time_left = Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
+            auto_step_data.time_left =
+                Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
         }
 
         if end {
@@ -118,7 +111,8 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
         if let Some(auto_step_data) = data.state.get_data_mut() {
             end = auto_step_data.set_next_image(data.images_paths.as_slice());
             auto_step_data.step_forward(&data.config.schedule);
-            auto_step_data.time_left = Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
+            auto_step_data.time_left =
+                Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
         }
 
         if end {
@@ -130,7 +124,8 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
         if let Some(auto_step_data) = data.state.get_data_mut() {
             auto_step_data.set_next_image(data.images_paths.as_slice());
             auto_step_data.step_forward_block(&data.config.schedule);
-            auto_step_data.time_left = Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
+            auto_step_data.time_left =
+                Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
         }
     });
 
@@ -157,6 +152,7 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
     });
 
     let image = Image::new(ImageBuf::empty())
+        .fill_mode(FillStrat::Contain)
         .controller(UpdateImage)
         .lens(ProgramData::state.map(
             |x| {
@@ -168,8 +164,7 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
                     auto_step_data.current_image = y.unwrap_or(Arc::new(ImageBuf::empty()))
                 }
             },
-        ))
-        .expand();
+        ));
 
     Flex::column()
         .with_child(
@@ -182,7 +177,7 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
                 .with_child(current)
                 .with_child(time),
         )
-        .with_child(image)
+        .with_flex_child(image, 1.0)
         .center()
         .controller(AutoStepControl::new())
 }
