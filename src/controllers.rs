@@ -61,7 +61,7 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
         env: &Env,
     ) {
         if !old_data.config.same(&data.config) {
-            data.config.try_save();
+            data.config.try_save().ok();
         }
         child.update(ctx, old_data, data, env);
     }
@@ -92,6 +92,7 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                                 auto_step_data.get_current_duration(data.config.schedule.as_slice())
                                     as f64,
                             );
+                            data.reset_transformations();
                         }
 
                         self.start_time = Some(now);
@@ -101,6 +102,7 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                 }
                 if end {
                     data.prepare_images(false);
+                    data.reset_transformations();
                 }
             }
             Event::Command(cmd) if cmd.is(START_AUTO_STEP) => {
@@ -115,6 +117,7 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                     AutoStepState::Stopped => {
                         self.timer_id = ctx.request_timer(Duration::from_millis(20));
                         self.start_time = Some(now);
+                        data.reset_transformations();
                         AutoStepState::Playing(AutoStepData::new(data))
                     }
                     AutoStepState::Playing(ref mut auto_step_data) => {
@@ -135,6 +138,27 @@ impl<W: Widget<ProgramData>> Controller<ProgramData, W> for AutoStepControl {
                 self.start_time = None;
                 self.timer_id = TimerToken::INVALID;
                 data.prepare_images(false);
+                data.reset_transformations();
+            }
+            Event::Command(cmd) if cmd.is(TOGGLE_BW) => {
+                data.black_and_white = !data.black_and_white;
+                if let Some(state_data) = data.state.get_data_mut() {
+                    if data.black_and_white {
+                        state_data.make_bw();
+                    } else {
+                        state_data.restore_image(false, data.mirrored);
+                    }
+                }
+            }
+            Event::Command(cmd) if cmd.is(TOGGLE_MIRROR) => {
+                data.mirrored = !data.mirrored;
+                if let Some(state_data) = data.state.get_data_mut() {
+                    if data.mirrored {
+                        state_data.mirror();
+                    } else {
+                        state_data.restore_image(data.black_and_white, false);
+                    }
+                }
             }
             _ => (),
         }

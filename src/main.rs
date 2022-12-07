@@ -1,6 +1,4 @@
-#![feature(bool_to_option)]
 #![feature(try_blocks)]
-#![feature(duration_zero)]
 
 use druid::{AppLauncher, LocalizedString, PlatformError, WindowDesc};
 

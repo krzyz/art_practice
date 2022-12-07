@@ -1,3 +1,5 @@
+use druid::image::{DynamicImage, GrayImage, RgbImage, RgbaImage};
+use druid::piet::ImageFormat;
 use druid::{Data, ImageBuf, Lens};
 
 use druid::Selector;
@@ -10,11 +12,11 @@ use std::fs;
 use std::fs::{create_dir_all, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{RwLock, Arc};
+use std::sync::{Arc, RwLock};
 
+use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use rand::rngs::ThreadRng;
 
 pub fn get_cache_path() -> Option<PathBuf> {
     ProjectDirs::from("com", "Real Complexity", "Art Practice").map(|proj_dirs| {
@@ -27,6 +29,9 @@ pub fn get_cache_path() -> Option<PathBuf> {
 
 pub const START_AUTO_STEP: Selector<()> = Selector::new("start_auto_step");
 pub const STOP_AUTO_STEP: Selector<()> = Selector::new("stop_auto_step");
+
+pub const TOGGLE_BW: Selector<()> = Selector::new("toggle_bw");
+pub const TOGGLE_MIRROR: Selector<()> = Selector::new("toggle_mirror");
 
 #[derive(Clone, Data, Lens, Serialize, Deserialize)]
 pub struct Config {
@@ -51,9 +56,9 @@ impl Config {
     }
     pub fn try_save(&self) -> io::Result<()> {
         let pretty = PrettyConfig::new()
-            .with_depth_limit(2)
-            .with_separate_tuple_members(true)
-            .with_enumerate_arrays(true);
+            .depth_limit(2)
+            .separate_tuple_members(true)
+            .enumerate_arrays(true);
 
         get_cache_path()
             .map(|path| {
@@ -77,6 +82,8 @@ pub struct ProgramData {
     pub config: Config,
     pub state: AutoStepState,
     pub rng: Arc<RwLock<ThreadRng>>,
+    pub black_and_white: bool,
+    pub mirrored: bool,
 }
 
 impl ProgramData {
@@ -86,9 +93,16 @@ impl ProgramData {
             config: Config::new(),
             state: AutoStepState::Stopped,
             rng: Arc::new(RwLock::new(thread_rng())),
+            black_and_white: false,
+            mirrored: false,
         };
         data.prepare_images(true);
         data
+    }
+
+    pub fn reset_transformations(&mut self) {
+        self.black_and_white = false;
+        self.mirrored = false;
     }
 
     pub fn prepare_images(&mut self, reload: bool) {
@@ -144,10 +158,30 @@ impl AutoStepState {
     }
 }
 
+fn to_image_crate_image(image: Arc<ImageBuf>) -> DynamicImage {
+    let width = image.width() as u32;
+    let height = image.height() as u32;
+    let pixels = image.raw_pixels().iter().copied().collect();
+
+    match image.format() {
+        ImageFormat::Rgb => DynamicImage::ImageRgb8(
+            RgbImage::from_raw(width, height, pixels).expect("Unable to convert image to rgb"),
+        ),
+        ImageFormat::RgbaPremul | ImageFormat::RgbaSeparate => DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(width, height, pixels).expect("Unable to convert image to rgba"),
+        ),
+        ImageFormat::Grayscale => DynamicImage::ImageLuma8(
+            GrayImage::from_raw(width, height, pixels)
+                .expect("Unable to convert image to grayscale"),
+        ),
+        _ => panic!("Unrecognized image format: {:#?}", image.format()),
+    }
+}
 #[derive(Clone, Data, Lens)]
 pub struct AutoStepData {
     pub current_image_id: usize,
     pub current_image: Arc<ImageBuf>,
+    pub unmodified_image: Arc<ImageBuf>,
     pub current: (usize, usize),
     pub time_left: Option<f64>,
 }
@@ -155,21 +189,61 @@ pub struct AutoStepData {
 impl AutoStepData {
     pub fn new(data: &ProgramData) -> Self {
         let id = 0;
+        let image = Arc::new(ImageBuf::from_file(&data.images_paths[id]).unwrap());
         AutoStepData {
             current_image_id: id,
-            current_image: Arc::new(ImageBuf::from_file(&data.images_paths[id]).unwrap()),
+            current_image: image.clone(),
+            unmodified_image: image,
             current: (0, 0),
             time_left: Some(data.config.schedule[0].1 as f64),
         }
     }
 
     pub fn set_image_from_path(&mut self, path: &PathBuf) {
-        self.current_image = Arc::new(ImageBuf::from_file(path).unwrap());
+        let image = Arc::new(ImageBuf::from_file(path).unwrap());
+        self.current_image = image.clone();
+        self.unmodified_image = image;
     }
 
     pub fn set_image_id(&mut self, images_paths: &[PathBuf], id: usize) {
         self.current_image_id = id;
         self.set_image_from_path(&images_paths[id]);
+    }
+
+    pub fn restore_image(&mut self, bw: bool, mirror: bool) {
+        self.current_image = self.unmodified_image.clone();
+        if bw {
+            self.make_bw();
+        }
+        if mirror {
+            self.mirror()
+        }
+    }
+
+    pub fn make_bw(&mut self) {
+        let mut image = to_image_crate_image(self.current_image.clone());
+
+        let grey_image = druid::image::imageops::grayscale(&mut image);
+
+        self.current_image = Arc::new(ImageBuf::from_raw(
+            grey_image.into_raw(),
+            ImageFormat::Grayscale,
+            self.current_image.width(),
+            self.current_image.height(),
+        ));
+    }
+
+    pub fn mirror(&mut self) {
+        let mut image = to_image_crate_image(self.current_image.clone());
+
+        let image = druid::image::imageops::flip_horizontal(&mut image);
+
+        self.current_image = Arc::new(ImageBuf::from_raw(
+            image.into_raw(),
+            ImageFormat::RgbaSeparate,
+            self.current_image.width(),
+            self.current_image.height(),
+        ));
     }
 
     pub fn set_next_image(&mut self, images_paths: &[PathBuf]) -> bool {

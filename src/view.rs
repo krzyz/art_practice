@@ -6,8 +6,11 @@ use druid::{
 
 use std::{path::PathBuf, sync::Arc};
 
-use crate::controllers::{AutoStepControl, UpdateImage};
 use crate::data::{AutoStepState, Config, ProgramData, START_AUTO_STEP, STOP_AUTO_STEP};
+use crate::{
+    controllers::{AutoStepControl, UpdateImage},
+    data::{TOGGLE_BW, TOGGLE_MIRROR},
+};
 
 pub fn ui_builder() -> impl Widget<ProgramData> {
     let presentation = presentation_ui_builder();
@@ -104,6 +107,8 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
         if end {
             data.prepare_images(false);
         }
+
+        data.reset_transformations();
     });
 
     let skip = Button::new("Skip").on_click(|_ctx, data: &mut ProgramData, _env| {
@@ -118,6 +123,8 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
         if end {
             data.prepare_images(false);
         }
+
+        data.reset_transformations();
     });
 
     let skip_block = Button::new("Skip block").on_click(|_ctx, data: &mut ProgramData, _env| {
@@ -127,10 +134,19 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
             auto_step_data.time_left =
                 Some(auto_step_data.get_current_duration(&data.config.schedule) as f64);
         }
+        data.reset_transformations();
     });
 
     let stop = Button::new("Stop").on_click(|ctx, _data: &mut ProgramData, _env| {
         ctx.submit_command(STOP_AUTO_STEP);
+    });
+
+    let black_and_white = Button::new("B/W").on_click(|ctx, _data: &mut ProgramData, _env| {
+        ctx.submit_command(TOGGLE_BW);
+    });
+
+    let mirrored = Button::new("Mirror").on_click(|ctx, _data: &mut ProgramData, _env| {
+        ctx.submit_command(TOGGLE_MIRROR);
     });
 
     let current = Label::new(|data: &ProgramData, _env: &Env| {
@@ -149,7 +165,8 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
                 .get_data()
                 .map_or(0., |data| data.time_left.unwrap_or(0.))
         )
-    });
+    })
+    .fix_width(50.0);
 
     let image = Image::new(ImageBuf::empty())
         .fill_mode(FillStrat::Contain)
@@ -174,6 +191,8 @@ pub fn presentation_ui_builder() -> impl Widget<ProgramData> {
                 .with_child(skip)
                 .with_child(skip_block)
                 .with_child(stop)
+                .with_child(black_and_white)
+                .with_child(mirrored)
                 .with_child(current)
                 .with_child(time),
         )
